@@ -19,6 +19,10 @@ app.post("/stream", async (req, res) => {
   if (!text || !String(text).trim()) return res.status(400).send("No text provided");
 
   try {
+    // Готовим заголовки сразу
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+
     const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`;
     const elevenRes = await fetch(apiUrl, {
       method: "POST",
@@ -28,9 +32,10 @@ app.post("/stream", async (req, res) => {
         "Accept": "audio/mpeg"
       },
       body: JSON.stringify({
-        text: String(text).slice(0, 500),        // на всякий — чтобы не рвало длинняк
+        // ❗ убрали slice(0,500), чтобы не резало текст
+        text: String(text).replace(/\s+/g, " ").trim(),
         model_id: MODEL_ID,
-        optimize_streaming_latency: 2,           // быстрее старт
+        optimize_streaming_latency: 2,
         voice_settings: { stability: 0.5, similarity_boost: 0.5 }
       })
     });
@@ -40,10 +45,16 @@ app.post("/stream", async (req, res) => {
       return res.status(502).send(errTxt || "ElevenLabs TTS failed");
     }
 
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Cache-Control", "no-store");
-    // НЕ ставим Transfer-Encoding: chunked — пусть Node сам решает
-    elevenRes.body.pipe(res);
+    // Корректный стрим с обработкой разрыва
+    const { pipeline } = await import("stream");
+    const { promisify } = await import("util");
+    const pump = promisify(pipeline);
+
+    req.on("close", () => {
+      try { elevenRes.body?.destroy?.(); } catch {}
+    });
+
+    await pump(elevenRes.body, res);
   } catch (err) {
     console.error("❌ ElevenLabs Error:", err);
     if (!res.headersSent) res.status(500).send("Error from ElevenLabs");
