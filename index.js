@@ -2,8 +2,6 @@ import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
-import { pipeline } from "stream";
-import { Readable } from "stream";
 
 dotenv.config();
 
@@ -16,22 +14,27 @@ app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 app.disable("x-powered-by");
 
+// health
+app.get("/", (_req, res) => res.send("✅ ElevenLabs Proxy running"));
+
 app.post("/stream", async (req, res) => {
   if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
 
   const { text } = req.body || {};
-  if (!text || !String(text).trim()) return res.status(400).send("No text provided");
+  const clean = (text ?? "").toString().replace(/\s+/g, " ").trim();
+  if (!clean) return res.status(400).send("No text provided");
 
   try {
-    // Убираем лимиты и лишние заголовки, которые могли мешать
+    // Готовим заголовки сразу — это поток
     req.setTimeout(0);
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
 
-    // Стримовый эндпоинт ElevenLabs с низкой задержкой
-    const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`;
+    const url =
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream` +
+      `?optimize_streaming_latency=3&output_format=mp3_44100_128`;
 
-    const elevenRes = await fetch(apiUrl, {
+    const upstream = await fetch(url, {
       method: "POST",
       headers: {
         "xi-api-key": ELEVEN_KEY,
@@ -39,32 +42,66 @@ app.post("/stream", async (req, res) => {
         "Accept": "audio/mpeg"
       },
       body: JSON.stringify({
-        text: String(text).replace(/\s+/g, " ").trim(),
+        text: clean,
         model_id: MODEL_ID,
         voice_settings: { stability: 0.5, similarity_boost: 0.5 }
       })
     });
 
-    if (!elevenRes.ok || !elevenRes.body) {
-      const errTxt = await elevenRes.text().catch(() => "");
-      return res.status(502).send(errTxt || "ElevenLabs TTS failed");
+    if (!upstream.ok || !upstream.body) {
+      const errTxt = await upstream.text().catch(() => "");
+      console.error("Upstream TTS error:", upstream.status, errTxt.slice(0, 500));
+      return res.status(502).send(errTxt || `TTS upstream ${upstream.status}`);
     }
 
-    // Конвертируем WebStream → NodeStream и пайпим в ответ
-    const nodeReadable = Readable.fromWeb(elevenRes.body);
-    pipeline(nodeReadable, res, (err) => {
-      if (err) console.error("Stream pipeline error:", err.message);
-    });
+    // === Поток: работаем на любой версии Node ===
+    const body = upstream.body;
+
+    // Если доступен WebStream reader — пишем чанки вручную
+    if (typeof body.getReader === "function") {
+      const reader = body.getReader();
+
+      // Если клиент закрыл соединение — прерываем чтение
+      let aborted = false;
+      const abort = async () => { try { aborted = true; await reader.cancel(); } catch {} };
+      req.on("aborted", abort);
+      req.on("close", abort);
+
+      try {
+        // Читаем и шлём чанки, пока не закончится поток
+        // (так работает даже на Node 16)
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done || aborted) break;
+          if (value && value.byteLength) res.write(Buffer.from(value));
+        }
+      } catch (e) {
+        console.error("Stream read error:", e?.message || e);
+      } finally {
+        res.end();
+      }
+      return;
+    }
+
+    // Fallback: если это уже Node-стрим (редко в v2 fetch)
+    if (typeof body.pipe === "function") {
+      body.pipe(res);
+      body.on("error", (e) => {
+        console.error("Pipe error:", e?.message || e);
+        try { res.end(); } catch {}
+      });
+      return;
+    }
+
+    // Совсем крайний случай — буферизация (почти не встречается)
+    const buf = await upstream.arrayBuffer();
+    res.end(Buffer.from(buf));
 
   } catch (err) {
-    console.error("❌ ElevenLabs Error:", err);
-    if (!res.headersSent) res.status(500).send("Error from ElevenLabs");
+    console.error("❌ Proxy crash:", err?.message || err);
+    if (!res.headersSent) res.status(500).send("Proxy error");
   }
 });
 
-app.get("/", (_req, res) => res.send("✅ ElevenLabs Flash Proxy running"));
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("🚀 Flash HTTP Proxy listening on port", PORT);
-});
+app.listen(PORT, () => console.log("🚀 ElevenLabs proxy on :", PORT));
