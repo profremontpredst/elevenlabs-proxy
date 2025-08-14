@@ -4,8 +4,6 @@ import fetch from "node-fetch";
 import dotenv from "dotenv";
 import { pipeline } from "stream";
 import { Readable } from "stream";
-import http from "http";
-import https from "https";
 
 dotenv.config();
 
@@ -18,19 +16,19 @@ app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 app.disable("x-powered-by");
 
-const httpsAgent = new https.Agent({ keepAlive: true });
-
 app.post("/stream", async (req, res) => {
   if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
+
   const { text } = req.body || {};
   if (!text || !String(text).trim()) return res.status(400).send("No text provided");
 
   try {
-    req.setTimeout(0); // не рвём долгие ответы
+    // Убираем лимиты и лишние заголовки, которые могли мешать
+    req.setTimeout(0);
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Connection", "keep-alive");
 
+    // Стримовый эндпоинт ElevenLabs с низкой задержкой
     const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`;
 
     const elevenRes = await fetch(apiUrl, {
@@ -44,9 +42,7 @@ app.post("/stream", async (req, res) => {
         text: String(text).replace(/\s+/g, " ").trim(),
         model_id: MODEL_ID,
         voice_settings: { stability: 0.5, similarity_boost: 0.5 }
-      }),
-      dispatcher: httpsAgent,
-      signal: AbortSignal.timeout(300000)
+      })
     });
 
     if (!elevenRes.ok || !elevenRes.body) {
@@ -54,6 +50,7 @@ app.post("/stream", async (req, res) => {
       return res.status(502).send(errTxt || "ElevenLabs TTS failed");
     }
 
+    // Конвертируем WebStream → NodeStream и пайпим в ответ
     const nodeReadable = Readable.fromWeb(elevenRes.body);
     pipeline(nodeReadable, res, (err) => {
       if (err) console.error("Stream pipeline error:", err.message);
@@ -68,4 +65,6 @@ app.post("/stream", async (req, res) => {
 app.get("/", (_req, res) => res.send("✅ ElevenLabs Flash Proxy running"));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 Flash HTTP Proxy listening on port", PORT));
+app.listen(PORT, () => {
+  console.log("🚀 Flash HTTP Proxy listening on port", PORT);
+});
