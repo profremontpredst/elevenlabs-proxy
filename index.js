@@ -15,41 +15,18 @@ app.disable("x-powered-by");
 
 app.get("/", (_req, res) => res.send("✅ ElevenLabs Proxy running"));
 
-/** POST /stream — оригинальный */
-app.post("/stream", async (req, res) => {
-  if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
-  const text = (req.body?.text ?? "").toString().replace(/\s+/g, " ").trim();
-  if (!text) return res.status(400).send("No text provided");
-  await proxyTTS(text, res);
-});
-
-/** POST /say — тот же TTS, но через POST */
 app.post("/say", async (req, res) => {
   if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
-  const text = (req.body?.text ?? "").toString().replace(/\s+/g, " ").trim();
+  const text = (req.body?.text ?? "").toString().trim();
   if (!text) return res.status(400).send("No text provided");
-  await proxyTTS(text, res);
-});
 
-/** GET /say — простой режим через query */
-app.get("/say", async (req, res) => {
-  if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
-  const text = (req.query.text ?? "").toString().replace(/\s+/g, " ").trim();
-  if (!text) return res.status(400).send("No text provided");
-  await proxyTTS(text, res);
-});
-
-async function proxyTTS(text, res) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "audio/mpeg");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Connection", "keep-alive");
-  if (typeof res.flushHeaders === "function") res.flushHeaders();
-
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`;
 
   try {
-    const upstream = await fetch(url, {
+    const upstream = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`, {
       method: "POST",
       headers: {
         "xi-api-key": ELEVEN_KEY,
@@ -64,28 +41,17 @@ async function proxyTTS(text, res) {
     });
 
     if (!upstream.ok || !upstream.body) {
-      const err = await upstream.text().catch(()=> "");
+      const err = await upstream.text().catch(() => "");
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       return res.status(upstream.status || 502).send(err || JSON.stringify({ error: "TTS upstream failed" }));
     }
 
-    const reader = upstream.body.getReader();
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value?.byteLength) {
-          const ok = res.write(Buffer.from(value));
-          if (!ok) await new Promise(r => res.once("drain", r));
-        }
-      }
-    } finally {
-      try { res.end(); } catch {}
-    }
+    // Прямой стрим в ответ, как в старой версии
+    upstream.body.pipe(res);
   } catch (e) {
     if (!res.headersSent) res.status(502).send("Proxy error");
   }
-}
+});
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 ElevenLabs proxy on :", PORT));
+app.listen(PORT, () => console.log("🚀 ElevenLabs proxy on:", PORT));
