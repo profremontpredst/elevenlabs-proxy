@@ -15,7 +15,7 @@ app.disable("x-powered-by");
 
 app.get("/", (_req, res) => res.send("✅ ElevenLabs Proxy running"));
 
-/** Оставляем POST /stream как есть (если нужно) */
+/** POST /stream — оригинальный */
 app.post("/stream", async (req, res) => {
   if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
   const text = (req.body?.text ?? "").toString().replace(/\s+/g, " ").trim();
@@ -23,7 +23,15 @@ app.post("/stream", async (req, res) => {
   await proxyTTS(text, res);
 });
 
-/** ПРОСТОЙ РЕЖИМ: GET /say?text=... — браузер сам играет по src */
+/** POST /say — тот же TTS, но через POST */
+app.post("/say", async (req, res) => {
+  if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
+  const text = (req.body?.text ?? "").toString().replace(/\s+/g, " ").trim();
+  if (!text) return res.status(400).send("No text provided");
+  await proxyTTS(text, res);
+});
+
+/** GET /say — простой режим через query */
 app.get("/say", async (req, res) => {
   if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
   const text = (req.query.text ?? "").toString().replace(/\s+/g, " ").trim();
@@ -61,7 +69,6 @@ async function proxyTTS(text, res) {
       return res.status(upstream.status || 502).send(err || JSON.stringify({ error: "TTS upstream failed" }));
     }
 
-    // Пишем в ответ «как есть»
     const reader = upstream.body.getReader();
     try {
       while (true) {
