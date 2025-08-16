@@ -8,6 +8,10 @@ const ELEVEN_KEY = process.env.ELEVEN_KEY;
 const VOICE_ID   = process.env.ELEVEN_VOICE_ID || "EXAVITQu4vr4xnSDxMaL";
 const MODEL_ID   = process.env.ELEVEN_MODEL_ID || "eleven_multilingual_v2";
 
+if (!ELEVEN_KEY) {
+  console.error("❌ ELEVEN_KEY is missing. Check your .env or environment variables.");
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -36,8 +40,11 @@ app.post("/say", async (req, res) => {
       })
     });
 
+    console.log("🔁 Request to ElevenLabs:", text.slice(0, 40));
+
     if (!response.ok) {
       const error = await response.text().catch(() => "");
+      console.error("❌ ElevenLabs TTS error:", response.status, error);
       return res.status(502).json({ error: "TTS failed", detail: error });
     }
 
@@ -48,6 +55,7 @@ app.post("/say", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.send(audioBuffer);
   } catch (err) {
+    console.error("❌ TTS proxy error:", err);
     res.status(500).send("TTS proxy error");
   }
 });
