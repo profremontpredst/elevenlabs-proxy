@@ -1,48 +1,44 @@
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ELEVEN_KEY = 'вставь_сюда_свой_ключ';
-
 app.post('/stream', async (req, res) => {
   try {
     const { text } = req.body;
 
-    const ttsRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream', {
+    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream', {
       method: 'POST',
       headers: {
-        'xi-api-key': ELEVEN_KEY,
+        'xi-api-key': process.env.ELEVEN_KEY,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_turbo_v2',
+        model_id: 'eleven_monolingual_v1',
         voice_settings: {
-          stability: 0.4,
+          stability: 0.5,
           similarity_boost: 0.8
         }
       })
     });
 
-    if (!ttsRes.ok || !ttsRes.body) {
-      console.error('TTS failed:', ttsRes.status);
-      res.status(500).send('TTS failed');
+    if (!response.ok || !response.body) {
+      res.status(500).send('Failed to fetch audio stream');
       return;
     }
 
     res.setHeader('Content-Type', 'audio/mpeg');
-    ttsRes.body.on('error', (err) => {
-      console.error('Stream error:', err);
-      res.end();
-    });
-    ttsRes.body.pipe(res);
-  } catch (e) {
-    console.error('❌ ElevenLabs Error:', e);
-    res.status(500).send('Internal server error');
+    response.body.pipe(res);
+  } catch (err) {
+    console.error('❌ ElevenLabs Error:', err);
+    res.status(500).send('error');
   }
 });
 
