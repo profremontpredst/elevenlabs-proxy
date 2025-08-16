@@ -13,16 +13,16 @@ app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 app.disable("x-powered-by");
 
-app.get("/", (_req, res) => res.send("✅ ElevenLabs TTS Proxy"));
+app.get("/", (_req, res) => res.send("✅ ElevenLabs TTS Proxy (MP3 REST)"));
 
 app.post("/say", async (req, res) => {
   const text = (req.body?.text ?? "").toString().trim();
   if (!text) return res.status(400).send("No text provided");
 
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`;
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`;
 
   try {
-    const upstream = await fetch(url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "xi-api-key": ELEVEN_KEY,
@@ -36,20 +36,21 @@ app.post("/say", async (req, res) => {
       })
     });
 
-    if (!upstream.ok || !upstream.body) {
-      const error = await upstream.text().catch(() => "");
+    if (!response.ok) {
+      const error = await response.text().catch(() => "");
       return res.status(502).json({ error: "TTS failed", detail: error });
     }
 
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = Buffer.from(arrayBuffer);
+
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Connection", "keep-alive");
-
-    upstream.body.pipe(res);
+    res.send(audioBuffer);
   } catch (err) {
     res.status(500).send("TTS proxy error");
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 ElevenLabs TTS proxy running on port", PORT));
+app.listen(PORT, () => console.log("🚀 ElevenLabs MP3 REST proxy running on port", PORT));
