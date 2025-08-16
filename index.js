@@ -13,7 +13,7 @@ app.post('/stream', async (req, res) => {
   try {
     const { text } = req.body;
 
-    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream', {
+    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB/stream', {
       method: 'POST',
       headers: {
         'xi-api-key': process.env.ELEVEN_KEY,
