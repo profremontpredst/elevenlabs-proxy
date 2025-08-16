@@ -6,30 +6,43 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const ELEVEN_KEY = 'вставь_сюда_свой_ключ';
+
 app.post('/stream', async (req, res) => {
   try {
     const { text } = req.body;
 
-    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream', {
+    const ttsRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream', {
       method: 'POST',
       headers: {
-        'xi-api-key': process.env.ELEVEN_KEY,
+        'xi-api-key': ELEVEN_KEY,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_turbo_v2',
         voice_settings: {
-          stability: 0.5,
+          stability: 0.4,
           similarity_boost: 0.8
         }
       })
     });
 
+    if (!ttsRes.ok || !ttsRes.body) {
+      console.error('TTS failed:', ttsRes.status);
+      res.status(500).send('TTS failed');
+      return;
+    }
+
     res.setHeader('Content-Type', 'audio/mpeg');
-    response.body.pipe(res);
-  } catch (err) {
-    res.status(500).send('error');
+    ttsRes.body.on('error', (err) => {
+      console.error('Stream error:', err);
+      res.end();
+    });
+    ttsRes.body.pipe(res);
+  } catch (e) {
+    console.error('❌ ElevenLabs Error:', e);
+    res.status(500).send('Internal server error');
   }
 });
 
