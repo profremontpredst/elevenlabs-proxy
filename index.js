@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const ELEVEN_KEY = process.env.ELEVEN_KEY;
-const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Kate – Calm & Friendly
+const VOICE_ID = "EDpEYNf6XIeKYRzYcx4I"; // Kate – Calm & Friendly
 const MODEL_ID = "eleven_flash_v2_5";
 
 const app = express();
