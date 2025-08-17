@@ -13,7 +13,7 @@ app.post('/stream', async (req, res) => {
   try {
     const { text } = req.body;
 
-    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/gedzfqL7OGdPbwm0ynTP/stream', {
+    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EDpEYNf6XIeKYRzYcx4I/stream', {
       method: 'POST',
       headers: {
         'xi-api-key': process.env.ELEVEN_KEY,
@@ -21,7 +21,7 @@ app.post('/stream', async (req, res) => {
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_turbo_v2',
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.8
