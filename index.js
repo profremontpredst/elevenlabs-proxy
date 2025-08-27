@@ -7,7 +7,7 @@ dotenv.config();
 
 const ELEVEN_KEY = process.env.ELEVEN_KEY;
 const VOICE_ID = "tOo2BJ74frmnPadsDNIi"; // chelik
-const MODEL_ID = "eleven_monolingual_v3";
+const MODEL_ID = "eleven_flash_v2_5";
 
 const app = express();
 app.use(cors());
