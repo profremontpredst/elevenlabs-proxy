@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const ELEVEN_KEY = process.env.ELEVEN_KEY;
-const VOICE_ID = "qJBO8ZmKp4te7NTtYgzz"; // chelik
+const VOICE_ID = "gedzfqL7OGdPbwm0ynTP"; // chelik
 const MODEL_ID = "eleven_flash_v2_5";
 
 const app = express();
