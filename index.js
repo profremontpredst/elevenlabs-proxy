@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.post("/stream", async (req, res) => {
-  const { text } = req.body;
+  const { text, emotion } = req.body;
   if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
   if (!text) return res.status(400).send("No text provided");
 
@@ -31,16 +31,22 @@ app.post("/stream", async (req, res) => {
         model_id: MODEL_ID,
         voice_settings: {
           stability: 0.5,
-          similarity_boost: 0.5
+          similarity_boost: 0.5,
+          style: emotion || "neutral"   // 🔥 новое поле, но необязательно
         }
       })
     });
+
+    if (!elevenRes.ok) {
+      const errText = await elevenRes.text();
+      throw new Error(`ElevenLabs HTTP ${elevenRes.status}: ${errText}`);
+    }
 
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Transfer-Encoding", "chunked");
     elevenRes.body.pipe(res);
   } catch (err) {
-    console.error("❌ ElevenLabs Error:", err);
+    console.error("❌ ElevenLabs Error:", err.message);
     res.status(500).send("Error from ElevenLabs");
   }
 });
