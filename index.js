@@ -50,6 +50,45 @@ app.post("/stream", async (req, res) => {
     res.status(500).send("Error from ElevenLabs");
   }
 });
+app.post("/stream-ogg", async (req, res) => {
+  const { text, emotion } = req.body;
+  if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
+  if (!text) return res.status(400).send("No text provided");
+
+  try {
+    const OUTPUT = "ogg_44100_64";
+    const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream?output_format=${OUTPUT}`;
+
+    const elevenRes = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "xi-api-key": ELEVEN_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text,
+        model_id: MODEL_ID,
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5,
+          style: emotion || "neutral"
+        }
+      })
+    });
+
+    if (!elevenRes.ok) {
+      const errText = await elevenRes.text();
+      throw new Error(`ElevenLabs HTTP ${elevenRes.status}: ${errText}`);
+    }
+
+    res.setHeader("Content-Type", "audio/ogg");
+    res.setHeader("Transfer-Encoding", "chunked");
+    elevenRes.body.pipe(res);
+  } catch (err) {
+    console.error("❌ ElevenLabs OGG Error:", err.message);
+    res.status(500).send("Error from ElevenLabs OGG");
+  }
+});
 
 app.get("/", (req, res) => {
   res.send("✅ ElevenLabs Flash Proxy running");
