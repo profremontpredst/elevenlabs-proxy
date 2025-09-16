@@ -12,6 +12,45 @@ const MODEL_ID = "eleven_flash_v2_5";
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.post("/tg-voice", async (req, res) => {
+  const { text, emotion } = req.body;
+  if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
+  if (!text) return res.status(400).send("No text provided");
+
+  try {
+    const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`;
+    const elevenRes = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "xi-api-key": ELEVEN_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text,
+        model_id: MODEL_ID,
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5
+        },
+        // эмоции пока просто для расширения
+        emotion: emotion || "neutral"
+      })
+    });
+
+    if (!elevenRes.ok) {
+      const errText = await elevenRes.text();
+      console.error("❌ ElevenLabs error:", errText);
+      return res.status(502).send("Error from ElevenLabs");
+    }
+
+    const buf = Buffer.from(await elevenRes.arrayBuffer());
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.send(buf);
+  } catch (err) {
+    console.error("❌ ElevenLabs /tg-voice Error:", err);
+    res.status(500).send("Error from ElevenLabs");
+  }
+});
 
 app.post("/stream", async (req, res) => {
   const { text } = req.body;
